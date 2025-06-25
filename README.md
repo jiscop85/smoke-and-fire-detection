@@ -1,3 +1,152 @@
+Fire and Smoke Detection System with YOLOv8
+This project implements a real-time fire and smoke detection system using YOLOv8 and Flask. It is capable of detecting fire and smoke through a connected webcam.
+
+Table of Contents
+Features
+
+Prerequisites
+
+Installation
+
+Usage
+
+File Structure
+
+Troubleshooting
+
+Important Notes
+
+Features
+Real-time fire and smoke detection using YOLOv8.
+
+Web-based interface built with Flask.
+
+Utilizes webcam for live video feed.
+
+Plays an alert sound upon detection.
+
+Prerequisites
+Before you begin, ensure you have the following:
+
+Python 3.8 or higher: The project is developed with Python 3.8+.
+
+Webcam: A connected and functional webcam.
+
+Minimum 4GB RAM: Recommended for smooth operation.
+
+Windows 10 or higher: The current setup is optimized for Windows. Minor adjustments might be needed for other operating systems.
+
+Installation
+Follow these steps to set up the project:
+
+Install Python:
+
+Download and install the latest version of Python from the official Python website.
+
+Crucially, make sure to select "Add Python to PATH" during installation.
+
+Download the Project:
+
+Download the project files from its repository.
+
+Extract the files to a suitable folder on your system.
+
+Create a Virtual Environment:
+Open your terminal (Command Prompt or PowerShell) and execute the following commands:
+
+# Navigate to your project folder
+cd path/to/your/project
+
+# Create a virtual environment
+python -m venv venv
+
+# Activate the virtual environment (on Windows)
+.\venv\Scripts\activate
+
+Install Required Libraries:
+With your virtual environment activated, install all necessary libraries using pip:
+
+pip install -r requirements.txt
+
+Download YOLOv8 Model:
+
+If you have your own trained YOLOv8 model (best.pt), place it in the following path: YOLOv8-Fire-and-Smoke-Detection/runs/detect/train/weights/best.pt.
+
+Otherwise, the system will automatically download and use the default YOLOv8n model upon first run.
+
+Usage
+Once the installation is complete, follow these steps to run the application:
+
+Ensure Virtual Environment is Activated:
+
+# On Windows
+.\venv\Scripts\activate
+
+Run the Application:
+Execute the main Python script:
+
+python app.py
+
+Access the Web Interface:
+
+Open your web browser.
+
+Navigate to http://localhost:5000.
+
+Click the "Start" button on the webpage to initiate the detection system.
+
+File Structure
+project/
+│
+├── app.py                     # Main application script
+├── requirements.txt           # List of required Python libraries
+├── Fire-Truck-Sound.mp3       # Alert sound file
+│
+├── templates/
+│   └── index.html             # Web page template
+│
+└── static/
+    └── style.css              # Stylesheet for the web page
+
+Troubleshooting
+Here are solutions to common issues you might encounter:
+
+Webcam is not working:
+
+Ensure your webcam is correctly connected and powered on.
+
+Close any other applications that might be using the webcam.
+
+Try restarting your system.
+
+Library installation errors:
+
+Verify that Python is installed correctly and added to your system's PATH.
+
+Try upgrading pip and reinstalling the requirements:
+
+pip install --upgrade pip
+pip install -r requirements.txt
+
+Web page does not open:
+
+Confirm that port 5000 is not being used by another application.
+
+Ensure you are entering the full address: http://localhost:5000.
+
+Important Notes
+For local network access, you can replace localhost with your system's IP address.
+
+To change the default port, you can modify the 5000 value in the app.py file.
+
+For improved performance or specific camera settings, you might need to adjust webcam configurations within the app.py file.
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
+
 # سیستم تشخیص دود و آتش با YOLOv8
 
 این پروژه یک سیستم تشخیص دود و آتش با استفاده از YOLOv8 و Flask است که قابلیت تشخیص آتش را از طریق دوربین وب‌کم دارد.
