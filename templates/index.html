@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سیستم تشخیص دود و آتش</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>سیستم تشخیص دود و آتش</h1>
+    </header>
+
+    <div class="container">
+        <div class="main-content">
+            <div class="video-container">
+                <img id="video-feed" style="display: none;" alt="Video Feed">
+                <div id="loading-message">در حال بارگذاری دوربین...</div>
+                <div id="error-message" style="display: none; color: red;">خطا در اتصال به دوربین</div>
+            </div>
+
+            <div class="status-container">
+                <div class="status">
+                    <span class="status-label">وضعیت سیستم:</span>
+                    <span class="status-value" id="system-status">متوقف شده</span>
+                </div>
+                <div class="status">
+                    <span class="status-label">وضعیت تشخیص:</span>
+                    <span class="status-value" id="detection-status">ایمن</span>
+                </div>
+                <div class="controls">
+                    <button class="start-btn" onclick="startDetection()">شروع</button>
+                    <button class="stop-btn" onclick="stopDetection()">توقف</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>سیستم تشخیص دود و آتش با استفاده از YOLOv8</p>
+    </footer>
+
+    <script>
+        let isRunning = false;
+        const videoFeed = document.getElementById('video-feed');
+        const loadingMessage = document.getElementById('loading-message');
+        const errorMessage = document.getElementById('error-message');
+
+        function showError(message) {
+            videoFeed.style.display = 'none';
+            loadingMessage.style.display = 'none';
+            errorMessage.style.display = 'block';
+            errorMessage.textContent = message;
+        }
+
+        function updateStatus(status) {
+            const detectionStatus = document.getElementById('detection-status');
+            if (status === 'danger') {
+                detectionStatus.textContent = 'خطر: آتش تشخیص داده شد!';
+                detectionStatus.className = 'status-value status-danger';
+            } else {
+                detectionStatus.textContent = 'ایمن';
+                detectionStatus.className = 'status-value status-safe';
+            }
+        }
+
+        function startDetection() {
+            if (!isRunning) {
+                loadingMessage.style.display = 'block';
+                errorMessage.style.display = 'none';
+                videoFeed.style.display = 'none';
+                
+                fetch('/start')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'started') {
+                            isRunning = true;
+                            document.getElementById('system-status').textContent = 'در حال اجرا';
+                            // Start video feed
+                            videoFeed.src = "{{ url_for('video_feed') }}";
+                            videoFeed.style.display = 'block';
+                            loadingMessage.style.display = 'none';
+                        } else {
+                            showError(data.message || 'خطا در راه‌اندازی دوربین');
+                        }
+                    })
+                    .catch(error => {
+                        showError('خطا در اتصال به سرور');
+                        console.error('Error:', error);
+                    });
+            }
+        }
+
+        function stopDetection() {
+            if (isRunning) {
+                fetch('/stop')
+                    .then(response => response.json())
+                    .then(data => {
+                        isRunning = false;
+                        document.getElementById('system-status').textContent = 'متوقف شده';
+                        updateStatus('safe');
+                        videoFeed.src = '';
+                        videoFeed.style.display = 'none';
+                        loadingMessage.style.display = 'block';
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+            }
+        }
+
+        // Handle video feed errors
+        videoFeed.onerror = function() {
+            if (isRunning) {
+                showError('خطا در نمایش تصویر دوربین');
+            }
+        };
+
+        // Check detection status periodically
+        setInterval(() => {
+            if (isRunning) {
+                fetch('/status')
+                    .then(response => response.json())
+                    .then(data => {
+                        updateStatus(data.status);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+            }
+        }, 1000);
+    </script>
+</body>
+</html> 
