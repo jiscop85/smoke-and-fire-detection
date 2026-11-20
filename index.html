@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سیستم تشخیص دود و آتش</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- TensorFlow.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; /* dark gray */
+            color: #e2e8f0; /* light gray */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            background-color: #2d3748; /* darker gray */
+            padding: 2.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            max-width: 900px;
+            width: 100%;
+        }
+        h1 {
+            font-size: 2.25rem;
+            font-weight: bold;
+            margin-bottom: 1.5rem;
+            color: #63b3ed; /* blue */
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px; /* Adjust as needed */
+            margin: 0 auto;
+            border: 2px solid #4a5568;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            background-color: black;
+        }
+        #webcamVideo {
+            width: 100%;
+            height: auto;
+            display: block;
+            transform: scaleX(-1); /* Mirror webcam feed */
+        }
+        #detectionCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1); /* Mirror canvas to match video */
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            justify-content: center;
+        }
+        .button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            color: white;
+        }
+        .button-primary {
+            background-color: #4299e1; /* blue */
+        }
+        .button-primary:hover {
+            background-color: #3182ce;
+        }
+        .button-danger {
+            background-color: #e53e3e; /* red */
+        }
+        .button-danger:hover {
+            background-color: #c53030;
+        }
+        .button-success {
+            background-color: #48bb78; /* green */
+        }
+        .button-success:hover {
+            background-color: #38a169;
+        }
+        .status-message {
+            margin-top: 1.5rem;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+        }
+        .status-loading {
+            background-color: #4a5568;
+            color: #cbd5e0;
+        }
+        .status-success {
+            background-color: #48bb78;
+            color: white;
+        }
+        .status-warning {
+            background-color: #ecc94b;
+            color: #2d3748;
+        }
+        .status-error {
+            background-color: #e53e3e;
+            color: white;
+        }
+        @keyframes pulse-red {
+            0%, 100% {
+                background-color: #e53e3e; /* red */
+            }
+            50% {
+                background-color: #c53030; /* darker red */
+            }
+        }
+        .pulse-red {
+            animation: pulse-red 1.5s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>سیستم تشخیص دود و آتش با هوش مصنوعی</h1>
+
+        <div class="video-container">
+            <video id="webcamVideo" autoplay muted playsinline></video>
+            <canvas id="detectionCanvas"></canvas>
+        </div>
+
+        <audio id="alarmSound" loop preload="auto">
+            <!-- You can use a local alarm sound file or a CDN link -->
+            <!-- For example, if you have 'alarm.mp3' in your project folder: -->
+            <!-- <source src="alarm.mp3" type="audio/mpeg"> -->
+            <!-- A sample alarm sound from a CDN for demonstration: -->
+            <source src="https://assets.mixkit.co/sfx/preview/mixkit-fire-engine-alarm-851.mp3" type="audio/mpeg">
+            Your browser does not support the audio element.
+        </audio>
+
+        <div class="controls">
+            <button id="startWebcamButton" class="button button-primary">شروع وب‌کم</button>
+            <button id="stopWebcamButton" class="button button-danger" disabled>توقف وب‌کم</button>
+            <button id="toggleAlarmButton" class="button button-success">فعال‌سازی آژیر: بله</button>
+        </div>
+
+        <div id="statusMessage" class="status-message status-loading">
+            در حال بارگذاری مدل هوش مصنوعی...
+        </div>
+    </div>
+
+    <script>
+        const webcamVideo = document.getElementById('webcamVideo');
+        const detectionCanvas = document.getElementById('detectionCanvas');
+        const ctx = detectionCanvas.getContext('2d');
+        const alarmSound = document.getElementById('alarmSound');
+        const startWebcamButton = document.getElementById('startWebcamButton');
+        const stopWebcamButton = document.getElementById('stopWebcamButton');
+        const toggleAlarmButton = document.getElementById('toggleAlarmButton');
+        const statusMessage = document.getElementById('statusMessage');
+
+        let model = null;
+        let webcamStream = null;
+        let isAlarmActive = true;
+        let fireSmokeDetectedCount = 0;
+        const ALARM_DETECTION_COUNT_THRESHOLD = 5; // Number of consecutive frames to trigger alarm
+        const DETECTION_THRESHOLD = 0.6; // Minimum confidence score for detection
+        const MODEL_PATH = './model/model.json'; // Path to your TensorFlow.js model
+
+        // YOLOv8 class names (assuming 0 for fire, 1 for smoke based on your data.yaml)
+        const classNames = ['fire', 'smoke'];
+
+        async function loadModel() {
+            statusMessage.textContent = 'در حال بارگذاری مدل هوش مصنوعی...';
+            statusMessage.className = 'status-message status-loading';
+            try {
+                model = await tf.loadGraphModel(MODEL_PATH);
+                statusMessage.textContent = 'مدل با موفقیت بارگذاری شد. آماده شروع وب‌کم.';
+                statusMessage.className = 'status-message status-success';
+                startWebcamButton.disabled = false;
+            } catch (error) {
+                console.error('خطا در بارگذاری مدل:', error);
+                statusMessage.textContent = `خطا در بارگذاری مدل: ${error.message}. مطمئن شوید پوشه 'model' حاوی model.json و فایل‌های .bin در کنار index.html قرار دارد.`;
+                statusMessage.className = 'status-message status-error';
+            }
+        }
+
+        async function startWebcam() {
+            if (!model) {
+                alert('مدل هنوز بارگذاری نشده است. لطفاً منتظر بمانید.');
+                return;
+            }
+            statusMessage.textContent = 'در حال فعال‌سازی وب‌کم...';
+            statusMessage.className = 'status-message status-loading';
+            try {
+                webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                webcamVideo.srcObject = webcamStream;
+                webcamVideo.onloadedmetadata = () => {
+                    webcamVideo.play();
+                    detectionCanvas.width = webcamVideo.videoWidth;
+                    detectionCanvas.height = webcamVideo.videoHeight;
+                    statusMessage.textContent = 'وب‌کم فعال شد. در حال تشخیص...';
+                    statusMessage.className = 'status-message status-success';
+                    startWebcamButton.disabled = true;
+                    stopWebcamButton.disabled = false;
+                    detectFrame();
+                };
+            } catch (error) {
+                console.error('خطا در دسترسی به وب‌کم:', error);
+                statusMessage.textContent = `خطا در دسترسی به وب‌کم: ${error.message}. مطمئن شوید به وب‌کم اجازه دسترسی داده‌اید.`;
+                statusMessage.className = 'status-message status-error';
+                startWebcamButton.disabled = false;
+                stopWebcamButton.disabled = true;
+            }
+        }
+
+        function stopWebcam() {
+            if (webcamStream) {
+                webcamStream.getTracks().forEach(track => track.stop());
+                webcamVideo.srcObject = null;
+                webcamStream = null;
+            }
+            ctx.clearRect(0, 0, detectionCanvas.width, detectionCanvas.height);
+            fireSmokeDetectedCount = 0;
+            alarmSound.pause();
+            alarmSound.currentTime = 0; // Reset sound
+            statusMessage.textContent = 'وب‌کم متوقف شد.';
+            statusMessage.className = 'status-message status-warning';
+            startWebcamButton.disabled = false;
+            stopWebcamButton.disabled = true;
+            statusMessage.classList.remove('pulse-red');
+        }
+
+        function toggleAlarm() {
+            isAlarmActive = !isAlarmActive;
+            toggleAlarmButton.textContent = `فعال‌سازی آژیر: ${isAlarmActive ? 'بله' : 'خیر'}`;
+            toggleAlarmButton.className = `button ${isAlarmActive ? 'button-success' : 'button-danger'}`;
+            if (!isAlarmActive) {
+                alarmSound.pause();
+                alarmSound.currentTime = 0; // Reset sound
+                statusMessage.classList.remove('pulse-red');
+            }
+        }
+
+        async function detectFrame() {
+            if (!webcamVideo.srcObject || webcamVideo.paused || webcamVideo.ended) {
+                return; // Stop detection if webcam is off or paused
+            }
+
+            // Create a tensor from the video frame
+            const tfImg = tf.browser.fromPixels(webcamVideo).toFloat();
+            // Resize to 640x640 (YOLOv8 input size) and normalize
+            const resized = tf.image.resizeBilinear(tfImg, [640, 640]).div(255.0).expandDims(0);
+
+            let detectedFireOrSmoke = false;
+
+            try {
+                // Run inference
+                // YOLOv8 output structure can vary. Typically, it's a [1, num_boxes, num_classes + 4] tensor
+                // where the last 4 elements are [x_center, y_center, width, height] and the rest are class confidences.
+                // Or, it might be separate tensors for boxes, scores, and classes.
+                const predictions = await model.executeAsync(resized);
+
+                // Assuming predictions is a single tensor for YOLOv8 output in TF.js:
+                // Shape: [1, N, 6] where N is number of detections, and 6 corresponds to [x, y, w, h, confidence, class_id]
+                // You might need to adjust this based on the actual output format of your exported model.
+                // console.log('Predictions tensor shape:', predictions.shape);
+                // console.log('Predictions:', await predictions.array());
+
+                // If the model output is [1, N, 6] as commonly seen for YOLOv8 TF.js export
+                const boxesData = await predictions.array();
+                const boxes = boxesData[0]; // Get the actual detections
+
+                ctx.clearRect(0, 0, detectionCanvas.width, detectionCanvas.height);
+
+                boxes.forEach(box => {
+                    const [x_center, y_center, width, height, confidence, class_id_float] = box;
+                    const class_id = Math.floor(class_id_float);
+
+                    if (confidence > DETECTION_THRESHOLD && (class_id === 0 || class_id === 1)) { // 0 for fire, 1 for smoke
+                        detectedFireOrSmoke = true;
+
+                        // Convert normalized YOLO coordinates to pixel coordinates
+                        const x = (x_center - width / 2) * detectionCanvas.width;
+                        const y = (y_center - height / 2) * detectionCanvas.height;
+                        const w = width * detectionCanvas.width;
+                        const h = height * detectionCanvas.height;
+
+                        // Draw bounding box
+                        ctx.beginPath();
+                        ctx.rect(x, y, w, h);
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = class_id === 0 ? '#e53e3e' : '#f6e05e'; // Red for fire, Yellow for smoke
+                        ctx.fillStyle = class_id === 0 ? 'rgba(229, 62, 62, 0.2)' : 'rgba(246, 224, 94, 0.2)';
+                        ctx.stroke();
+                        ctx.fill();
+
+                        // Draw label background
+                        const label = `${classNames[class_id]} ${Math.round(confidence * 100)}%`;
+                        ctx.font = '16px Arial';
+                        ctx.fillStyle = class_id === 0 ? '#e53e3e' : '#f6e05e';
+                        const textWidth = ctx.measureText(label).width;
+                        ctx.fillRect(x, y > 15 ? y - 20 : y, textWidth + 10, 20);
+
+                        // Draw label text
+                        ctx.fillStyle = 'white';
+                        ctx.fillText(label, x + 5, y > 15 ? y - 5 : y + 15);
+                    }
+                });
+
+                if (detectedFireOrSmoke) {
+                    fireSmokeDetectedCount++;
+                    if (fireSmokeDetectedCount >= ALARM_DETECTION_COUNT_THRESHOLD && isAlarmActive) {
+                        alarmSound.play();
+                        statusMessage.textContent = 'هشدار: دود یا آتش تشخیص داده شد!';
+                        statusMessage.className = 'status-message status-error pulse-red';
+                    } else if (isAlarmActive) {
+                        statusMessage.textContent = `تشخیص: ${fireSmokeDetectedCount}/${ALARM_DETECTION_COUNT_THRESHOLD} - در حال بررسی...`;
+                        statusMessage.className = 'status-message status-warning';
+                        alarmSound.pause(); // Ensure it's paused if not yet reached threshold
+                    }
+                } else {
+                    fireSmokeDetectedCount = 0;
+                    alarmSound.pause();
+                    alarmSound.currentTime = 0; // Reset sound
+                    statusMessage.textContent = 'وب‌کم فعال شد. در حال تشخیص...';
+                    statusMessage.className = 'status-message status-success';
+                    statusMessage.classList.remove('pulse-red');
+                }
+
+                // Clean up tensors to free memory
+                tfImg.dispose();
+                predictions.dispose();
+
+            } catch (error) {
+                console.error('خطا در تشخیص فریم:', error);
+                statusMessage.textContent = `خطای تشخیص: ${error.message}`;
+                statusMessage.className = 'status-message status-error';
+                alarmSound.pause();
+                statusMessage.classList.remove('pulse-red');
+            }
+
+            requestAnimationFrame(detectFrame); // Continue the loop
+        }
+
+        // Event Listeners
+        startWebcamButton.addEventListener('click', startWebcam);
+        stopWebcamButton.addEventListener('click', stopWebcam);
+        toggleAlarmButton.addEventListener('click', toggleAlarm);
+
+        // Initial load
+        loadModel();
+    </script>
+</body>
+</html> 
