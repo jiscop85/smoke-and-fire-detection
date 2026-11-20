@@ -1,0 +1,11 @@
+path: ./datasets/fire  # dataset root dir
+train: ./datasets/fire/images/train  # train images
+val: ./datasets/fire/images/val  # val images
+
+# Classes
+names:
+  0: fire
+  1: smoke
+
+# Number of classes
+nc: 2
